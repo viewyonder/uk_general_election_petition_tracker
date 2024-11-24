@@ -25,7 +25,8 @@ st.set_page_config(
 
 # Add some content to dashboard
 logo = Image.open('viewyonder eye logo lobster lobster 600x200.png')
-st.image(logo))
+st.image(logo)
+
 # Initialize GitHub connection
 store = Github(st.secrets["GITHUB_TOKEN"]).get_repo(st.secrets["GITHUB_REPO"])
 
