@@ -26,6 +26,10 @@ st.set_page_config(
 # Add some content to dashboard
 logo = Image.open('viewyonder eye logo lobster lobster 600x200.png')
 st.image(logo)
+st.write("A fun little Streamlit app to get the count of signatures every minute from the Parliament petition for a UK General Election.")
+st.markdown("🌐 Go sign the petition](https://petition.parliament.uk/petitions/700143)")
+st.markdown("Write to your MP with [Write To Them](https://www.writetothem.com/)")
+
 
 # Initialize GitHub connection
 store = Github(st.secrets["GITHUB_TOKEN"]).get_repo(st.secrets["GITHUB_REPO"])
