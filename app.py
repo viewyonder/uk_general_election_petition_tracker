@@ -14,6 +14,7 @@ from io import StringIO
 from pathlib import Path
 import base64
 from github import Github
+from PIL import Image
 
 # Page config
 st.set_page_config(
@@ -22,6 +23,9 @@ st.set_page_config(
     layout="wide"
 )
 
+# Add some content to dashboard
+logo = Image.open('viewyonder eye logo lobster lobster 600x200.png')
+st.image(logo))
 # Initialize GitHub connection
 store = Github(st.secrets["GITHUB_TOKEN"]).get_repo(st.secrets["GITHUB_REPO"])
 
