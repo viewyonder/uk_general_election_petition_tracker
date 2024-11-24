@@ -10,7 +10,10 @@ import plotly.express as px
 import os
 import time
 import csv
+from io import StringIO
 from pathlib import Path
+import base64
+from github import Github
 
 # Page config
 st.set_page_config(
@@ -18,6 +21,9 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+# Initialize GitHub connection
+store = Github(st.secrets["GITHUB_TOKEN"]).get_repo(st.secrets["GITHUB_REPO"])
 
 # Initialize session state
 if 'last_fetch_time' not in st.session_state:
@@ -46,23 +52,67 @@ def get_petition_count(url):
         st.error(f"Error fetching count: {e}")
         return None
 
+#def load_data():
+#    """Load data from CSV file."""
+#    if os.path.exists('petition_counts.csv'):
+#        df = pd.read_csv('petition_counts.csv')
+#        df['timestamp'] = pd.to_datetime(df['timestamp'])
+#        return df
+#    return pd.DataFrame(columns=['timestamp', 'count'])
+
 def load_data():
-    """Load data from CSV file."""
-    if os.path.exists('petition_counts.csv'):
-        df = pd.read_csv('petition_counts.csv')
+    """Load data from GitHub CSV file."""
+    try:
+        # Get file content from GitHub
+        #file = store.repo.get_contents(store.file_path)
+        file = store.get_contents('petition_counts.csv')
+        content = base64.b64decode(file.content).decode()
+        
+        # Convert to DataFrame
+        df = pd.read_csv(pd.io.common.StringIO(content))
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         return df
-    return pd.DataFrame(columns=['timestamp', 'count'])
+    except Exception as e:
+        # If file doesn't exist or there's an error, return empty DataFrame
+        return pd.DataFrame(columns=['timestamp', 'count'])
+    
+#def log_count(timestamp, count):
+#    """Log count to CSV file."""
+#    file_exists = os.path.exists('petition_counts.csv')
+#    
+#    with open('petition_counts.csv', 'a', newline='') as f:
+#        writer = csv.writer(f)
+#        if not file_exists:
+#            writer.writerow(['timestamp', 'count'])
+#        writer.writerow([timestamp, count])
 
 def log_count(timestamp, count):
-    """Log count to CSV file."""
-    file_exists = os.path.exists('petition_counts.csv')
-    
-    with open('petition_counts.csv', 'a', newline='') as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(['timestamp', 'count'])
-        writer.writerow([timestamp, count])
+    """Log count to GitHub CSV file."""
+    try:
+        # Try to get existing file
+        try:
+            file = store.get_contents('petition_counts.csv')
+            # Decode existing content
+            current_data = base64.b64decode(file.content).decode()
+            # Add new row
+            new_data = current_data.rstrip() + f"\n{timestamp},{count}"
+            # Update file
+            store.update_file(
+                'petition_counts.csv',
+                f"Update petition count: {count}",
+                new_data,
+                file.sha
+            )
+        except:
+            # File doesn't exist, create new with headers
+            content = f"timestamp,count\n{timestamp},{count}"
+            store.create_file(
+                'petition_counts.csv',
+                f"Initial petition count: {count}",
+                content
+            )
+    except Exception as e:
+        st.error(f"Error saving to GitHub: {e}")
 
 def calculate_metrics(df):
     """Calculate metrics including rolling averages."""
@@ -242,20 +292,25 @@ def main():
             fig = create_live_chart(df, rolling_5min, rolling_15min)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Show recent data using iloc
+            # Show recent data
             st.subheader("Recent Readings")
             n_recent = 10
-            start_idx = max(0, len(df) - n_recent)
-            recent_df = df.iloc[start_idx:].copy()
-            recent_df['5min_avg'] = rolling_5min.iloc[-n_recent:]
-            recent_df['15min_avg'] = rolling_15min.iloc[-n_recent:]
             
+            # Create recent dataframe with rate calculation
+            recent_df = df.copy().sort_values('timestamp', ascending=False).head(n_recent)
+            # Calculate rate (signatures per minute)
+            recent_df['rate'] = recent_df['count'].diff(-1).abs() / \
+                            (recent_df['timestamp'].diff(-1).dt.total_seconds() / 60)
+            
+            # Select and rename columns
+            display_df = recent_df[['timestamp', 'count', 'rate']].copy()
+            
+            # Format the dataframe for display
             st.dataframe(
-                recent_df.sort_values('timestamp', ascending=False)
-                .style.format({
+                display_df.style.format({
+                    'timestamp': lambda x: x.strftime('%Y-%m-%d %H:%M:%S'),
                     'count': '{:,}',
-                    '5min_avg': '{:.1f}',
-                    '15min_avg': '{:.1f}'
+                    'rate': '{:.1f}'
                 }),
                 use_container_width=True
             )
